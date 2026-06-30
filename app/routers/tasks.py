@@ -1,42 +1,45 @@
-from fastapi import APIRouter, HTTPException, status
-from app.data import tasks
-from app.schemas import Task
+from fastapi import APIRouter, HTTPException, Depends, status
+from app.database import get_db
+from sqlalchemy.orm import Session
+from app import crud, schemas
 
 router = APIRouter()
-
-def validate_task_id(task_id: int):
-    if task_id < 0 or task_id >= len(tasks):
-        raise HTTPException(status_code=404, detail="Task not found!")
     
-@router.get("/tasks")
-def get_tasks(completed: bool | None = None):
-    filtered_tasks = tasks
+@router.get("/tasks", response_model=list[schemas.TaskResponse])
+def get_tasks(db: Session = Depends(get_db), completed: bool | None = None):
+    filtered_tasks = crud.get_tasks(db)
     if completed is not None:
         filtered_tasks = [
             task
-            for task in tasks
+            for task in filtered_tasks
             if task.completed == completed
-        ]    
-    return {"success": True, "count": len(filtered_tasks), "data": filtered_tasks}   
+        ]
+    return filtered_tasks      
 
-@router.post("/tasks", status_code=status.HTTP_201_CREATED)
-def create_tasks(task: Task):
-    tasks.append(task)
-    return {"success": True, "msg": "Task added successfully", "data": task} 
+@router.post("/tasks", response_model=schemas.TaskResponse, status_code=status.HTTP_201_CREATED)
+def create_task(task: schemas.TaskCreate, db: Session = Depends(get_db)):
+    return crud.create_task(db, task)
 
-@router.get("/tasks/{task_id}")
-def get_task_by_id(task_id: int):
-    validate_task_id(task_id)
-    return {"success": True, "data": tasks[task_id]}     
+@router.get("/tasks/{task_id}", response_model=schemas.TaskResponse)
+def get_task(task_id: int, db: Session = Depends(get_db)):
+    task = crud.get_task(db, task_id)
+    if not task:
+        raise HTTPException(404, "Task not found")
+    return task    
 
-@router.put("/tasks/{task_id}")
-def update_task(task_id: int, task: Task):
-    validate_task_id(task_id)
-    tasks[task_id] = task
-    return {"success": True, "msg": "Task updated successfully", "data": tasks[task_id]} 
+@router.patch("/tasks/{task_id}", response_model=schemas.TaskResponse)
+def update_task(task_id: int, task: schemas.TaskUpdate, db: Session = Depends(get_db)):
+    updated_task = crud.update_task(db, task_id, task)
+    if not updated_task:
+        raise HTTPException(
+            status_code=404,
+            detail="Task not found"
+        )
+    return updated_task
 
 @router.delete("/tasks/{task_id}")
-def delete_task(task_id: int):
-    validate_task_id(task_id)
-    del tasks[task_id]
-    return {"success": True, "msg": "Task deleted successfully"}    
+def delete_task(task_id: int, db: Session = Depends(get_db)):
+    deleted_task = crud.delete_task(db, task_id)
+    if not deleted_task:
+        raise HTTPException(404, "Task not found")
+    return {"message": "Task deleted successfully"} 
