@@ -8,6 +8,6 @@ app.include_router(tasks_router)
 @app.get("/health")
 def home():
     return {
-        "status": "Up",
+        "status": "Healthy",
         "message": "Welcome to FastAPI"
     }
